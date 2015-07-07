@@ -1,16 +1,32 @@
 /*! iScroll v5.1.3 ~ (c) 2008-2014 Matteo Spinelli ~ http://cubiq.org/license */
 (function (window, document, Math) {
+	/**
+	 * window.requestAnimationFrame()这个方法是用来在页面重绘之前，通知浏览器调用一个指定的函数，以满足开发者操作动画的需求。这个方法接受一个函数为参，该函数会在重绘前调用。
+	 *注意: 如果想得到连贯的逐帧动画，函数中必须重新调用 requestAnimationFrame()。
+	 * @type {window.requestAnimationFrame|*|Function}
+	 */
 var rAF = window.requestAnimationFrame	||
 	window.webkitRequestAnimationFrame	||
 	window.mozRequestAnimationFrame		||
 	window.oRequestAnimationFrame		||
 	window.msRequestAnimationFrame		||
 	function (callback) { window.setTimeout(callback, 1000 / 60); };
-
+	/**
+	 * 工具类 函数
+	 */
 var utils = (function () {
+	//命名空间：将需要暴露给外界调用的方法放在me对象中，其他var生命的方法则保持为私有
 	var me = {};
-
+		/**
+		 * 用于判断浏览器是否支持相关的css3属性
+		 * @type {CSSStyleDeclaration}
+		 * @private
+		 */
 	var _elementStyle = document.createElement('div').style;
+		/**
+		 *判断CSS属性样式前缀
+		 * 返回'',webkit,Moz,ms,O   或者 false
+		 */
 	var _vendor = (function () {
 		var vendors = ['t', 'webkitT', 'MozT', 'msT', 'OT'],
 			transform,
@@ -25,20 +41,40 @@ var utils = (function () {
 		return false;
 	})();
 
+		/**
+		 * 获取CSS 前缀
+		 * @param style
+		 * @returns {*}
+		 * @private
+		 */
 	function _prefixStyle (style) {
 		if ( _vendor === false ) return false;
 		if ( _vendor === '' ) return style;
 		return _vendor + style.charAt(0).toUpperCase() + style.substr(1);
 	}
-
+		/**
+		 * 获取当前时间戳
+		 * @type {*|Function}
+		 */
 	me.getTime = Date.now || function getTime () { return new Date().getTime(); };
-
+		/**
+		 * 扩展方法
+		 * @param target
+		 * @param obj
+		 */
 	me.extend = function (target, obj) {
 		for ( var i in obj ) {
 			target[i] = obj[i];
 		}
 	};
-
+		/**
+		 *
+		 * @param el
+		 * @param type
+		 * @param fn
+		 * @param capture   是否捕获
+		 * useCapture，是一個boolean值，就是true or false 。如果送出true的話就是瀏覽器會使用Capture方式，false的話是Bubbling，只有在特定狀況下才會有影響，通常建議是false
+		 */
 	me.addEvent = function (el, type, fn, capture) {
 		el.addEventListener(type, fn, !!capture);
 	};
@@ -46,18 +82,31 @@ var utils = (function () {
 	me.removeEvent = function (el, type, fn, capture) {
 		el.removeEventListener(type, fn, !!capture);
 	};
-
+		/**
+		 * 适配
+		 * @param pointerEvent
+		 * @returns {*}
+		 */
 	me.prefixPointerEvent = function (pointerEvent) {
 		return window.MSPointerEvent ? 
 			'MSPointer' + pointerEvent.charAt(9).toUpperCase() + pointerEvent.substr(10):
 			pointerEvent;
 	};
-
+		/**
+		 * 根据拖动返回运动的长度和耗时，用户惯性拖动的判断
+		 * @param current
+		 * @param start
+		 * @param time
+		 * @param lowerMargin
+		 * @param wrapperSize
+		 * @param deceleration
+		 * @returns {{destination: number, duration: (number|*)}}
+		 */
 	me.momentum = function (current, start, time, lowerMargin, wrapperSize, deceleration) {
-		var distance = current - start,
-			speed = Math.abs(distance) / time,
+		var distance = current - start,//拖动距离
+			speed = Math.abs(distance) / time,//拖动平均速度
 			destination,
-			duration;
+			duration;//持续时间
 
 		deceleration = deceleration === undefined ? 0.0006 : deceleration;
 
@@ -81,7 +130,9 @@ var utils = (function () {
 	};
 
 	var _transform = _prefixStyle('transform');
-
+		/**
+		 * 扩展me，增加一些相关属性
+ 		 */
 	me.extend(me, {
 		hasTransform: _transform !== false,
 		hasPerspective: _prefixStyle('perspective') in _elementStyle,
@@ -110,7 +161,7 @@ var utils = (function () {
 		if ( me.hasClass(e, c) ) {
 			return;
 		}
-
+		//先将存在的转为数组，添加后由数组转为字符串
 		var newclass = e.className.split(' ');
 		newclass.push(c);
 		e.className = newclass.join(' ');
@@ -124,7 +175,11 @@ var utils = (function () {
 		var re = new RegExp("(^|\\s)" + c + "(\\s|$)", 'g');
 		e.className = e.className.replace(re, ' ');
 	};
-
+		/**
+		 * 返回元素距左、上的距离
+		 * @param el
+		 * @returns {{left: number, top: number}}
+		 */
 	me.offset = function (el) {
 		var left = -el.offsetLeft,
 			top = -el.offsetTop;
@@ -141,7 +196,12 @@ var utils = (function () {
 			top: top
 		};
 	};
-
+		/**
+		 *
+		 * @param el
+		 * @param exceptions
+		 * @returns {boolean}
+		 */
 	me.preventDefaultException = function (el, exceptions) {
 		for ( var i in exceptions ) {
 			if ( exceptions[i].test(el[i]) ) {
@@ -151,7 +211,9 @@ var utils = (function () {
 
 		return false;
 	};
-
+		/**
+		 * 扩展me的eventType
+		 */
 	me.extend(me.eventType = {}, {
 		touchstart: 1,
 		touchmove: 1,
@@ -169,7 +231,11 @@ var utils = (function () {
 		MSPointerMove: 3,
 		MSPointerUp: 3
 	});
-
+		/**
+		 * 动画函数
+		 * style为css3调用
+		 * fn为js调用
+		 */
 	me.extend(me.ease = {}, {
 		quadratic: {
 			style: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
@@ -217,7 +283,11 @@ var utils = (function () {
 			}
 		}
 	});
-
+		/**
+		 * 模拟tap事件
+		 * @param e
+		 * @param eventName
+		 */
 	me.tap = function (e, eventName) {
 		var ev = document.createEvent('Event');
 		ev.initEvent(eventName, true, true);
@@ -225,7 +295,10 @@ var utils = (function () {
 		ev.pageY = e.pageY;
 		e.target.dispatchEvent(ev);
 	};
-
+		/**
+		 * 模拟点击事件
+		 * @param e
+		 */
 	me.click = function (e) {
 		var target = e.target,
 			ev;
@@ -246,55 +319,95 @@ var utils = (function () {
 })();
 
 function IScroll (el, options) {
+	//wrapper是iScroll的容器
 	this.wrapper = typeof el == 'string' ? document.querySelector(el) : el;
+	//iScroll的滚动元素
 	this.scroller = this.wrapper.children[0];
+	//scroller的Style对象，通过set它的属性改变样式
 	this.scrollerStyle = this.scroller.style;		// cache style for better performance
-
+	//初始化参数
 	this.options = {
 
 // INSERT POINT: OPTIONS 
 
 		startX: 0,
 		startY: 0,
+		//默认是Y轴上下滚动
 		scrollY: true,
+		//方向锁定阀值，用户点击屏幕后，滑动5px的距离后，判断用户的拖动意图
 		directionLockThreshold: 5,
+		//是否有惯性缓冲动画
 		momentum: true,
-
+		//超出边界是否还能拖动
 		bounce: true,
+		//超出边界还原时间点
 		bounceTime: 600,
+		//超出边界返回的动画
 		bounceEasing: '',
-
+		//是否阻止默认滚动事件
 		preventDefault: true,
+		//当遇到表单元素则不阻止冒泡，而是弹出系统自带相应的输入控件
 		preventDefaultException: { tagName: /^(INPUT|TEXTAREA|BUTTON|SELECT)$/ },
-
+		//
 		HWCompositing: true,
 		useTransition: true,
 		useTransform: true
 	};
-
+	//合并配置参数
 	for ( var i in options ) {
 		this.options[i] = options[i];
 	}
 
 	// Normalize options
+	/**
+	 * 判断是否支持3D加速
+	 * @type {string}
+	 */
 	this.translateZ = this.options.HWCompositing && utils.hasPerspective ? ' translateZ(0)' : '';
-
+	/**
+	 * 判断是否支持css3的transition动画
+	 * @type {*|boolean}
+	 */
 	this.options.useTransition = utils.hasTransition && this.options.useTransition;
+	/**
+	 * 判断是否支持css3的transform属性
+	 * 目前主流的手机都支持transition及transform
+	 * @type {*|boolean}
+	 */
 	this.options.useTransform = utils.hasTransform && this.options.useTransform;
-
+	/**
+	 * 是否支持事件穿透
+	 * ？？？
+	 */
 	this.options.eventPassthrough = this.options.eventPassthrough === true ? 'vertical' : this.options.eventPassthrough;
+	/**
+	 * 是否阻止默认行为，这里一般设置为true防止页面在手机端被默认拖动
+	 * @type {boolean}
+	 */
 	this.options.preventDefault = !this.options.eventPassthrough && this.options.preventDefault;
 
 	// If you want eventPassthrough I have to lock one of the axes
+	/**
+	 * 判断滚动的方向 X OR Y
+	 * @type {boolean}
+	 */
 	this.options.scrollY = this.options.eventPassthrough == 'vertical' ? false : this.options.scrollY;
 	this.options.scrollX = this.options.eventPassthrough == 'horizontal' ? false : this.options.scrollX;
 
 	// With eventPassthrough we also need lockDirection mechanism
+	/**
+	 * 是否支持双向同时自由滚动
+	 * @type {boolean|*}
+	 */
 	this.options.freeScroll = this.options.freeScroll && !this.options.eventPassthrough;
 	this.options.directionLockThreshold = this.options.eventPassthrough ? 0 : this.options.directionLockThreshold;
-
+	/**
+	 * 惯性动画的设置
+	 */
 	this.options.bounceEasing = typeof this.options.bounceEasing == 'string' ? utils.ease[this.options.bounceEasing] || utils.ease.circular : this.options.bounceEasing;
-
+	/**
+	 * 当window触发resize事件60ms后还原
+	 */
 	this.options.resizePolling = this.options.resizePolling === undefined ? 60 : this.options.resizePolling;
 
 	if ( this.options.tap === true ) {
@@ -303,7 +416,8 @@ function IScroll (el, options) {
 
 // INSERT POINT: NORMALIZATION
 
-	// Some defaults	
+	// Some defaults
+	//一些默认，不会被重写的参数属性
 	this.x = 0;
 	this.y = 0;
 	this.directionX = 0;
@@ -311,7 +425,9 @@ function IScroll (el, options) {
 	this._events = {};
 
 // INSERT POINT: DEFAULTS
-
+	/**
+	 * 初始化
+	 */
 	this._init();
 	this.refresh();
 
@@ -321,14 +437,19 @@ function IScroll (el, options) {
 
 IScroll.prototype = {
 	version: '5.1.3',
-
+	/**
+	 * IScroll 的初始化方法
+	 * @private
+	 */
 	_init: function () {
 		this._initEvents();
 
 // INSERT POINT: _init
 
 	},
-
+	/**
+	 * IScroll 的销毁方法
+	 */
 	destroy: function () {
 		this._initEvents(true);
 
@@ -790,45 +911,62 @@ IScroll.prototype = {
 // INSERT POINT: _translate
 
 	},
-
+	/**
+	 *页面初始化时的一些事件，如果传参数则是取消事件绑定，不传就是添加事件绑定
+	 * @param remove    true   removeEvent   false addEvent
+	 * @private
+	 */
 	_initEvents: function (remove) {
 		var eventType = remove ? utils.removeEvent : utils.addEvent,
+			//bindToWrapper 相对应的window事件绑定
 			target = this.options.bindToWrapper ? this.wrapper : window;
-
+		//旋转屏幕事件
 		eventType(window, 'orientationchange', this);
 		eventType(window, 'resize', this);
 
 		if ( this.options.click ) {
 			eventType(this.wrapper, 'click', this, true);
 		}
-
+		/**
+		 * 判断机型做相应的事件绑定
+		 * 针对PC的touch事件
+		 */
 		if ( !this.options.disableMouse ) {
 			eventType(this.wrapper, 'mousedown', this);
 			eventType(target, 'mousemove', this);
 			eventType(target, 'mousecancel', this);
 			eventType(target, 'mouseup', this);
 		}
-
+		/**
+		 * 针对win phone的touch事件
+		 */
 		if ( utils.hasPointer && !this.options.disablePointer ) {
 			eventType(this.wrapper, utils.prefixPointerEvent('pointerdown'), this);
 			eventType(target, utils.prefixPointerEvent('pointermove'), this);
 			eventType(target, utils.prefixPointerEvent('pointercancel'), this);
 			eventType(target, utils.prefixPointerEvent('pointerup'), this);
 		}
-
+		/**
+		 * 针对ios & android的touch事件
+		 */
 		if ( utils.hasTouch && !this.options.disableTouch ) {
 			eventType(this.wrapper, 'touchstart', this);
 			eventType(target, 'touchmove', this);
 			eventType(target, 'touchcancel', this);
 			eventType(target, 'touchend', this);
 		}
-
+		/**
+		 * css3 动画结束后的回调事件
+		 */
 		eventType(this.scroller, 'transitionend', this);
 		eventType(this.scroller, 'webkitTransitionEnd', this);
 		eventType(this.scroller, 'oTransitionEnd', this);
 		eventType(this.scroller, 'MSTransitionEnd', this);
 	},
-
+	/**
+	 * 获得一个DOM的实时样式，在touchstart石化保留DOM样式状态十分有用
+	 * @returns {{x: *, y: *}}    返回x,y坐标的位移
+	 */
 	getComputedPosition: function () {
 		var matrix = window.getComputedStyle(this.scroller, null),
 			x, y;
