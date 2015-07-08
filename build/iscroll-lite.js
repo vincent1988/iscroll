@@ -455,7 +455,11 @@ IScroll.prototype = {
 
 		this._execEvent('destroy');
 	},
-
+	/**
+	 *  'transitionend', 'webkitTransitionEnd','oTransitionEnd','MSTransitionEnd'触发该事件
+	 * @param e
+	 * @private
+	 */
 	_transitionEnd: function (e) {
 		if ( e.target != this.scroller || !this.isInTransition ) {
 			return;
@@ -467,19 +471,24 @@ IScroll.prototype = {
 			this._execEvent('scrollEnd');
 		}
 	},
-
+	/**
+	 *  'touchstart', 'pointerdown', 'MSPointerDown', 'mousedown'  触发该函数
+	 * @param e
+	 * @private
+	 */
 	_start: function (e) {
 		// React to left mouse button only
+		//判断是鼠标左键按下的拖动
 		if ( utils.eventType[e.type] != 1 ) {
 			if ( e.button !== 0 ) {
 				return;
 			}
 		}
-
+		//判断是否开启拖动，是否初始化完成
 		if ( !this.enabled || (this.initiated && utils.eventType[e.type] !== this.initiated) ) {
 			return;
 		}
-
+		//如果options中设置了preventDefault 并且不是badandriod并且。。  则阻止默认事件
 		if ( this.options.preventDefault && !utils.isBadAndroid && !utils.preventDefaultException(e.target, this.options.preventDefaultException) ) {
 			e.preventDefault();
 		}
@@ -494,46 +503,60 @@ IScroll.prototype = {
 		this.directionX = 0;
 		this.directionY = 0;
 		this.directionLocked = 0;
-
+		/**
+		 * 开启动画时间，如果之前有动画的话，便要停止动画，因为没有传事件，所以动画便直接停止了
+		 * 用于停止拖动产生的惯性动作（touchstart时也可能正在滚动）
+		 */
 		this._transitionTime();
-
+		//记录touchstart 的时间
 		this.startTime = utils.getTime();
-
+		//如果正在动画状态，则让页面停止在手指触摸处   css3动画
 		if ( this.options.useTransition && this.isInTransition ) {
 			this.isInTransition = false;
+			//获取X,Y坐标值
 			pos = this.getComputedPosition();
+			//touchstart时，让正在滚动的页面停下来
 			this._translate(Math.round(pos.x), Math.round(pos.y));
 			this._execEvent('scrollEnd');
-		} else if ( !this.options.useTransition && this.isAnimating ) {
+		}
+		//js动画   停止
+		else if ( !this.options.useTransition && this.isAnimating ) {
 			this.isAnimating = false;
 			this._execEvent('scrollEnd');
 		}
-
+		//重新设置一些位置参数
 		this.startX    = this.x;
 		this.startY    = this.y;
 		this.absStartX = this.x;
 		this.absStartY = this.y;
 		this.pointX    = point.pageX;
 		this.pointY    = point.pageY;
-
+		//触发beforeScrollStart事件   TODO 所以可以监听该事件进行一些before event
 		this._execEvent('beforeScrollStart');
 	},
-
+	/**
+	 * 'touchmove','pointermove','MSPointerMove','mousemove'时调用的函数
+	 * @param e
+	 * @private
+	 */
 	_move: function (e) {
+		//判断是否可以滑动，初始化是否完成，否则。。
 		if ( !this.enabled || utils.eventType[e.type] !== this.initiated ) {
 			return;
 		}
-
+		//看参数是否有设置禁用 默认行为
 		if ( this.options.preventDefault ) {	// increases performance on Android? TODO: check!
 			e.preventDefault();
 		}
-
+		/**
+		 * 记录当前的一些数据，为dom移动做准备
+		 */
 		var point		= e.touches ? e.touches[0] : e,
-			deltaX		= point.pageX - this.pointX,
-			deltaY		= point.pageY - this.pointY,
-			timestamp	= utils.getTime(),
-			newX, newY,
-			absDistX, absDistY;
+			deltaX		= point.pageX - this.pointX,	//拖动的距离X 这里的值每300ms刷新一次的距离
+			deltaY		= point.pageY - this.pointY,	//拖动的距离Y
+			timestamp	= utils.getTime(),	//拖动时候的时间戳
+			newX, newY,						//拖动目的地的 X   Y距离
+			absDistX, absDistY;				//距离的绝对值，用于判断滚动方向
 
 		this.pointX		= point.pageX;
 		this.pointY		= point.pageY;
@@ -544,11 +567,13 @@ IScroll.prototype = {
 		absDistY		= Math.abs(this.distY);
 
 		// We need to move at least 10 pixels for the scrolling to initiate
+		//滑动的时间大于300ms  并且距离小于10px   则不滑动
 		if ( timestamp - this.endTime > 300 && (absDistX < 10 && absDistY < 10) ) {
 			return;
 		}
 
 		// If you are scrolling in one direction lock the other
+		//根据10px的距离来确定用户意图，判断用户拖动的意图
 		if ( !this.directionLocked && !this.options.freeScroll ) {
 			if ( absDistX > absDistY + this.options.directionLockThreshold ) {
 				this.directionLocked = 'h';		// lock horizontally
@@ -558,11 +583,13 @@ IScroll.prototype = {
 				this.directionLocked = 'n';		// no lock
 			}
 		}
-
+		//横向滚动
 		if ( this.directionLocked == 'h' ) {
 			if ( this.options.eventPassthrough == 'vertical' ) {
 				e.preventDefault();
-			} else if ( this.options.eventPassthrough == 'horizontal' ) {
+			}
+			//todo
+			else if ( this.options.eventPassthrough == 'horizontal' ) {
 				this.initiated = false;
 				return;
 			}
@@ -578,24 +605,30 @@ IScroll.prototype = {
 
 			deltaX = 0;
 		}
-
+		//拖动的距离
 		deltaX = this.hasHorizontalScroll ? deltaX : 0;
 		deltaY = this.hasVerticalScroll ? deltaY : 0;
-
+		//将当前位置 + 位移  =  实际移动的距离
 		newX = this.x + deltaX;
 		newY = this.y + deltaY;
 
 		// Slow down if outside of the boundaries
+		/**
+		 * 如果拖动已经超出边界了，则减慢拖动的速度
+		 */
 		if ( newX > 0 || newX < this.maxScrollX ) {
 			newX = this.options.bounce ? this.x + deltaX / 3 : newX > 0 ? 0 : this.maxScrollX;
 		}
 		if ( newY > 0 || newY < this.maxScrollY ) {
 			newY = this.options.bounce ? this.y + deltaY / 3 : newY > 0 ? 0 : this.maxScrollY;
 		}
-
+		/**
+		 * 确定滑动的方向
+		 * @type {number}
+		 */
 		this.directionX = deltaX > 0 ? -1 : deltaX < 0 ? 1 : 0;
 		this.directionY = deltaY > 0 ? -1 : deltaY < 0 ? 1 : 0;
-
+		//第一次拖动时的回调
 		if ( !this.moved ) {
 			this._execEvent('scrollStart');
 		}
@@ -605,7 +638,9 @@ IScroll.prototype = {
 		this._translate(newX, newY);
 
 /* REPLACE START: _move */
-
+		/**
+		 * 每300ms会重置一次当前位置以及开始事件，这个就是为什么抓住不放很久突然丢开仍然有长距离移动的原因
+		 */
 		if ( timestamp - this.startTime > 300 ) {
 			this.startTime = timestamp;
 			this.startX = this.x;
@@ -615,7 +650,19 @@ IScroll.prototype = {
 /* REPLACE END: _move */
 
 	},
-
+	/**
+	 *  'touchend':
+	  'pointerup':
+	  'MSPointerUp':
+	  'mouseup':
+	  'touchcancel':
+	  'pointercancel':
+	  'MSPointerCancel':
+	  'mousecancel':
+	 	执行该方法
+	 * @param e
+	 * @private
+	 */
 	_end: function (e) {
 		if ( !this.enabled || utils.eventType[e.type] !== this.initiated ) {
 			return;
@@ -624,30 +671,33 @@ IScroll.prototype = {
 		if ( this.options.preventDefault && !utils.preventDefaultException(e.target, this.options.preventDefaultException) ) {
 			e.preventDefault();
 		}
-
+		//手指离开时  保存一些相关数据
 		var point = e.changedTouches ? e.changedTouches[0] : e,
 			momentumX,
 			momentumY,
-			duration = utils.getTime() - this.startTime,
+			duration = utils.getTime() - this.startTime,  //拖动的耗时，这里并不是touchstart质检的耗时，是在_move()里每隔300ms更新一次的时间
 			newX = Math.round(this.x),
 			newY = Math.round(this.y),
-			distanceX = Math.abs(newX - this.startX),
+			distanceX = Math.abs(newX - this.startX), //拖动的距离
 			distanceY = Math.abs(newY - this.startY),
 			time = 0,
 			easing = '';
-
-		this.isInTransition = 0;
-		this.initiated = 0;
+		//重置一些参数
+		this.isInTransition = 0;      //是否处于css动画的状态
+		this.initiated = 0;			//是否初始化
 		this.endTime = utils.getTime();
 
 		// reset if we are outside of the boundaries
+		//若超出边界，则将按照超出边界的逻辑走， 不执行end后续动作
 		if ( this.resetPosition(this.options.bounceTime) ) {
 			return;
 		}
-
+		//滚性拖动距离
 		this.scrollTo(newX, newY);	// ensures that the last position is rounded
 
 		// we scrolled less than 10 pixels
+
+		//如果滚动小于10px则认为发生了tap 和 click事件
 		if ( !this.moved ) {
 			if ( this.options.tap ) {
 				utils.tap(e, this.options.tap);
@@ -656,17 +706,22 @@ IScroll.prototype = {
 			if ( this.options.click ) {
 				utils.click(e);
 			}
-
+			//执行scrollCancel
 			this._execEvent('scrollCancel');
 			return;
 		}
-
+		//鼠标点击的 轻弹 事件
 		if ( this._events.flick && duration < 200 && distanceX < 100 && distanceY < 100 ) {
 			this._execEvent('flick');
 			return;
 		}
 
 		// start momentum animation if needed
+		/**
+		 *若果需要滚性移动的话   则运行如下计算公式
+		 * 根据动力加速度计算出来的动画参数
+		 * 计算出相关的距离
+		 */
 		if ( this.options.momentum && duration < 300 ) {
 			momentumX = this.hasHorizontalScroll ? utils.momentum(this.x, this.startX, duration, this.maxScrollX, this.options.bounce ? this.wrapperWidth : 0, this.options.deceleration) : { destination: newX, duration: 0 };
 			momentumY = this.hasVerticalScroll ? utils.momentum(this.y, this.startY, duration, this.maxScrollY, this.options.bounce ? this.wrapperHeight : 0, this.options.deceleration) : { destination: newY, duration: 0 };
@@ -680,6 +735,7 @@ IScroll.prototype = {
 
 		if ( newX != this.x || newY != this.y ) {
 			// change easing function when scroller goes out of the boundaries
+			//如果有惯性移动，并且惯性移动超出了边界，则开启css3动画的回弹效果
 			if ( newX > 0 || newX < this.maxScrollX || newY > 0 || newY < this.maxScrollY ) {
 				easing = utils.ease.quadratic;
 			}
@@ -687,10 +743,14 @@ IScroll.prototype = {
 			this.scrollTo(newX, newY, time, easing);
 			return;
 		}
-
+		//调用scrollEnd事件
 		this._execEvent('scrollEnd');
 	},
-
+	/**
+	 * 方向、大小改变
+	 * orientationchange resize事件调用该函数
+	 * @private
+	 */
 	_resize: function () {
 		var that = this;
 
@@ -700,7 +760,12 @@ IScroll.prototype = {
 			that.refresh();
 		}, this.options.resizePolling);
 	},
-
+	/**
+	 * _end    _transitionEnd     refresh
+	 * 重置位置信息
+	 * @param time
+	 * @returns {boolean}
+	 */
 	resetPosition: function (time) {
 		var x = this.x,
 			y = this.y;
@@ -722,20 +787,28 @@ IScroll.prototype = {
 		if ( x == this.x && y == this.y ) {
 			return false;
 		}
-
+		//
 		this.scrollTo(x, y, time, this.options.bounceEasing);
 
 		return true;
 	},
-
+	/**
+	 * 暴露给开发者用的方法
+	 * 禁用Iscroll
+	 */
 	disable: function () {
 		this.enabled = false;
 	},
-
+	/**
+	 * 开启iscroll
+	 */
 	enable: function () {
 		this.enabled = true;
 	},
-
+	/**
+	 * 更新iscroll的相关信息，一般用于初始化时获取页面相关数据以便后续调用，
+	 * 在异步加载、旋转屏幕时也调用该函数  重新获取页面数据
+	 */
 	refresh: function () {
 		var rf = this.wrapper.offsetHeight;		// Force reflow
 
@@ -754,7 +827,7 @@ IScroll.prototype = {
 
 		this.hasHorizontalScroll	= this.options.scrollX && this.maxScrollX < 0;
 		this.hasVerticalScroll		= this.options.scrollY && this.maxScrollY < 0;
-
+		//如果不能横向滚动 则重置maxScrollx为0 scrollerwidth和iscroll对象宽度一致
 		if ( !this.hasHorizontalScroll ) {
 			this.maxScrollX = 0;
 			this.scrollerWidth = this.wrapperWidth;
@@ -768,17 +841,17 @@ IScroll.prototype = {
 		this.endTime = 0;
 		this.directionX = 0;
 		this.directionY = 0;
-
+		//left top距离
 		this.wrapperOffset = utils.offset(this.wrapper);
-
+		//执行事件refresh
 		this._execEvent('refresh');
-
+		//重置位置
 		this.resetPosition();
 
 // INSERT POINT: _refresh
 
 	},
-
+	//iscroll对象绑定事件
 	on: function (type, fn) {
 		if ( !this._events[type] ) {
 			this._events[type] = [];
@@ -786,7 +859,7 @@ IScroll.prototype = {
 
 		this._events[type].push(fn);
 	},
-
+	//iscroll对象解绑事件方法
 	off: function (type, fn) {
 		if ( !this._events[type] ) {
 			return;
@@ -798,7 +871,11 @@ IScroll.prototype = {
 			this._events[type].splice(index, 1);
 		}
 	},
-
+	/**
+	 * 事件触发器，类似于zepto的triiger
+	 * @param type
+	 * @private
+	 */
 	_execEvent: function (type) {
 		if ( !this._events[type] ) {
 			return;
@@ -812,10 +889,17 @@ IScroll.prototype = {
 		}
 
 		for ( ; i < l; i++ ) {
+			//？？？
 			this._events[type][i].apply(this, [].slice.call(arguments, 1));
 		}
 	},
-
+	/**
+	 *
+	 * @param x   滑动多少
+	 * @param y
+	 * @param time	滑动时间
+	 * @param easing	动画
+	 */
 	scrollBy: function (x, y, time, easing) {
 		x = this.x + x;
 		y = this.y + y;
@@ -823,34 +907,50 @@ IScroll.prototype = {
 
 		this.scrollTo(x, y, time, easing);
 	},
-
+	/**
+	 *
+	 * @param x	移动的x轴坐标
+	 * @param y	移动的y轴坐标
+	 * @param time
+	 * @param easing
+	 */
 	scrollTo: function (x, y, time, easing) {
 		easing = easing || utils.ease.circular;
 
 		this.isInTransition = this.options.useTransition && time > 0;
-
+		//如果有css动画或移动时间不存在，直接调用css3移动
 		if ( !time || (this.options.useTransition && easing.style) ) {
+			//设置相关的css3动画属性及位置，直接位移过去
 			this._transitionTimingFunction(easing.style);
 			this._transitionTime(time);
 			this._translate(x, y);
 		} else {
+			//否则用js动画执行
 			this._animate(x, y, time, easing.fn);
 		}
 	},
-
+	/**
+	 * 该方法实际上对scrollTo进一步封装，滚动到相应的元素区域
+	 * @param el	为需要滚动的元素引用
+	 * @param time	滚动时间
+	 * @param offsetX{boolean}
+	 * @param offsetY{boolean}
+	 * @param easing	动画效果
+	 */
 	scrollToElement: function (el, time, offsetX, offsetY, easing) {
 		el = el.nodeType ? el : this.scroller.querySelector(el);
 
 		if ( !el ) {
 			return;
 		}
-
+		//元素的位置情况
 		var pos = utils.offset(el);
 
 		pos.left -= this.wrapperOffset.left;
 		pos.top  -= this.wrapperOffset.top;
 
 		// if offsetX/Y are true we center the element to the screen
+		// 如果offsetX   Y为true  则将该元素放在中间
 		if ( offsetX === true ) {
 			offsetX = Math.round(el.offsetWidth / 2 - this.wrapper.offsetWidth / 2);
 		}
@@ -868,7 +968,11 @@ IScroll.prototype = {
 
 		this.scrollTo(pos.left, pos.top, time, easing);
 	},
-
+	/**
+	 *	css3动画时长
+	 * @param time 动画时间，单位ms  如果不传参数则为0   即为直接停止动画
+	 * @private
+	 */
 	_transitionTime: function (time) {
 		time = time || 0;
 
@@ -881,14 +985,24 @@ IScroll.prototype = {
 // INSERT POINT: _transitionTime
 
 	},
-
+	/**
+	 * css3 动画函数
+	 * @param easing
+	 * @private
+	 */
 	_transitionTimingFunction: function (easing) {
 		this.scrollerStyle[utils.style.transitionTimingFunction] = easing;
 
 // INSERT POINT: _transitionTimingFunction
 
 	},
-
+	/**
+	 * 动画位移  如果支持css3动画，则使用transform进行位移
+	 * iscroll都是靠它进行位移
+	 * @param x
+	 * @param y
+	 * @private
+	 */
 	_translate: function (x, y) {
 		if ( this.options.useTransform ) {
 
@@ -982,7 +1096,15 @@ IScroll.prototype = {
 
 		return { x: x, y: y };
 	},
-
+	/**
+	 *如果启用了css3动画，便会使用css3动画方式进行动画，否则使用_animate方法（js实现方案）
+	 *这里使用RAF的动画   用于保证动画的流畅性
+	 * @param destX
+	 * @param destY
+	 * @param duration
+	 * @param easingFn
+	 * @private
+	 */
 	_animate: function (destX, destY, duration, easingFn) {
 		var that = this,
 			startX = this.x,
@@ -994,7 +1116,7 @@ IScroll.prototype = {
 			var now = utils.getTime(),
 				newX, newY,
 				easing;
-
+			//如果时间大于等于动画结束时间
 			if ( now >= destTime ) {
 				that.isAnimating = false;
 				that._translate(destX, destY);
@@ -1011,7 +1133,7 @@ IScroll.prototype = {
 			newX = ( destX - startX ) * easing + startX;
 			newY = ( destY - startY ) * easing + startY;
 			that._translate(newX, newY);
-
+			//递归调用来执行动画
 			if ( that.isAnimating ) {
 				rAF(step);
 			}
@@ -1020,6 +1142,10 @@ IScroll.prototype = {
 		this.isAnimating = true;
 		step();
 	},
+	/**
+	 * 根据事件执行相应的方法
+	 * @param e
+	 */
 	handleEvent: function (e) {
 		switch ( e.type ) {
 			case 'touchstart':
@@ -1071,6 +1197,9 @@ IScroll.prototype = {
 		}
 	}
 };
+	/**
+	 * 将utils工具类函数归到isroll下面   方便开发者调用
+	 */
 IScroll.utils = utils;
 
 if ( typeof module != 'undefined' && module.exports ) {
